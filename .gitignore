@@ -1,0 +1,107 @@
+# Local notes (never commit)
+LOCAL_DEPLOY_NOTES.md
+GIT_WORKFLOW.md
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+./claude/
+.antigravityrules
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+/backend/.env
+/frontend/.env
+
+# Prisma generated client (regenerated via `npx prisma generate`)
+backend/src/generated/
+backend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# AI
+.claude/
+.agents/
+
+# Docker volumes (local data)
+postgres_data/
+
+# Staging / production environment files (never commit real secrets)
+.env.staging
+.env.production
+.env.diploma
+.env.rehearsal
+
+# Homelab deploy state flags (created by CI on first-run seed)
+.rehearsal-seeded
+.diploma-seeded
+
+# Docker Compose local overrides
+docker-compose.override.yml
+
+# Prisma migrations lock (keep migrations, not dev.db)
+*.db
+*.db-journal
+
+# Puppeteer cache
+.cache/
+
+# User-uploaded files (keep directory structure via .gitkeep)
+backend/uploads/logos/*
+!backend/uploads/logos/.gitkeep
+backend/uploads/stamps/*
+!backend/uploads/stamps/.gitkeep
+backend/backups/*
+!backend/backups/.gitkeep
+
+# System audit log files (runtime-generated, append-only)
+backend/logs/
+
+# Test output (coverage reports, Playwright artifacts)
+frontend/coverage/
+backend/coverage/
+frontend/playwright-report/
+frontend/tests/e2e/artifacts/
+
+# k6 load test reports (generated artifacts — keep .gitkeep)
+backend/tests/load/reports/*.html
+backend/tests/load/reports/*.json
+
+# Personal session workflow notes (not part of the codebase)
+docs/SESSION_WORKFLOW.md
+
+# Claude Code local config (machine-specific, never commit)
+.claude/
+**/settings.local.json
+
+# Graphify outputs (never commit)
+graphify-out/
+.graphify_*
+.graphifyignore

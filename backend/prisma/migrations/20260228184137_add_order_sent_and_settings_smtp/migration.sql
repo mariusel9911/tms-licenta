@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE "app_settings" ADD COLUMN     "orderNumberStart" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "smtpEmail" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "smtpEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "smtpHost" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "smtpPassword" TEXT NOT NULL DEFAULT '',
+ADD COLUMN     "smtpPort" INTEGER NOT NULL DEFAULT 587;
+
+-- AlterTable
+ALTER TABLE "orders" ADD COLUMN     "isSent" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "sentAt" TIMESTAMP(3);

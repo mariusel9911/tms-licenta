@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: tms_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tms_user
+      POSTGRES_PASSWORD: tms_password
+      POSTGRES_DB: tms_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tms_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - '5050:80'
+    depends_on:
+      - postgres
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: tms_ollama
+    restart: unless-stopped
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_models:/root/.ollama
+
+  python-api:
+    build:
+      context: ./python-api
+      dockerfile: Dockerfile
+    container_name: tms_python_api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://tms_user:tms_password@postgres:5432/tms_db
+      PORT: 8000
+      API_SECRET: dev-python-api-secret-change-me
+    ports:
+      - '8000:8000'
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.2.1
+    container_name: tms_uptime_kuma
+    restart: unless-stopped
+    volumes:
+      - uptime_kuma_data:/app/data
+    ports:
+      - '3003:3001'
+
+volumes:
+  postgres_data:
+  ollama_models:
+  uptime_kuma_data:

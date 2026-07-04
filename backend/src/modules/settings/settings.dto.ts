@@ -1,0 +1,57 @@
+import { z } from 'zod';
+
+// Minimal stub — full UpdateSettingsDto implemented in Milestone 8
+// Only GET is needed in M6B (read-only fetch for PDF generation + form header)
+export const UpdateSettingsDto = z.object({
+  companyName: z.string().max(200).optional(),
+  companyVatCode: z.string().max(30).optional(),
+  companyRegNumber: z.string().max(50).optional(),
+  companyAddress: z.string().max(500).optional(),
+  companyCity: z.string().max(100).optional(),
+  companyCounty: z.string().max(100).optional(),
+  companyIban: z.string().max(34).optional(),
+  companyBank: z.string().max(100).optional(),
+  companySwift: z.string().max(100).optional(),
+  companyPhone: z.string().max(30).optional(),
+  companyEmail: z.string().max(254).optional(),
+  termsAndConditions: z.string().max(50000).optional(),
+  smartbillEmail: z.string().max(254).optional(),
+  smartbillApiToken: z.string().max(500).optional(),
+  smartbillSeriesName: z.string().max(20).optional(),
+  smartbillVatCode: z.string().max(30).optional(),
+  defaultVatPercent: z.number().min(0).max(100).optional(),
+  defaultCurrency: z.string().max(10).optional(),
+  defaultPaymentDays: z.number().int().min(0).optional(),
+  orderNumberStart: z.number().int().min(1).optional(),
+  smtpEmail: z.string().max(254).optional(),
+  smtpPassword: z.string().max(500).optional(),
+  smtpHost: z.string().max(255).optional(),
+  smtpPort: z.number().int().min(1).max(65535).optional(),
+  smtpEnabled: z.boolean().optional(),
+  smtpSecure: z.boolean().optional(),
+  autoArchiveEnabled: z.boolean().optional(),
+  autoArchiveAfterMonths: z.number().int().min(3).max(120).optional(),
+  autoArchiveFrequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).optional(),
+  autoArchiveDay: z.number().int().min(0).max(31).nullable().optional(),
+  autoArchiveTime: z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'autoArchiveTime must be HH:MM').optional(),
+  autoBackupEnabled: z.boolean().optional(),
+  autoBackupFrequency: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']).optional(),
+  autoBackupDay: z.number().int().min(0).max(28).nullable().optional(),
+  autoBackupTime: z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'autoBackupTime must be HH:MM').optional(),
+  autoBackupDestination: z.enum(['local', 'remote', 'both']).optional(),
+  autoBackupRetainCount: z.number().int().min(1).max(365).optional(),
+  aiChatbotEnabled: z.boolean().optional(),
+  aiPredictionEnabled: z.boolean().optional(),
+  auditBackupEnabled: z.boolean().optional(),
+  auditAuthEnabled: z.boolean().optional(),
+  auditUserMgmtEnabled: z.boolean().optional(),
+  auditSettingsEnabled: z.boolean().optional(),
+  // Maintenance mode (M41)
+  maintenanceEnabled: z.boolean().optional(),
+  maintenanceMessage: z.string().max(500).optional(),
+  // Rate limit configuration (M41)
+  rateLimitPerUser: z.number().int().min(10).max(500).optional(),
+  rateLimitEnabled: z.boolean().optional(),
+});
+
+export type UpdateSettingsDtoType = z.infer<typeof UpdateSettingsDto>;

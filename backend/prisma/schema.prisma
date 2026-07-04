@@ -1,0 +1,522 @@
+// ============================================================
+// TMS - Transport Management System
+// Schema Prisma + PostgreSQL
+// ============================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// UTILIZATORI & AUTENTIFICARE
+// ============================================================
+
+enum UserRole {
+  ADMIN      // Developer / super admin
+  DISPATCHER // Dispecer - gestionează comenzile
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(DISPATCHER)
+  isActive     Boolean  @default(true)
+  totpSecret        String?
+  totpEnabled       Boolean        @default(false)
+  emailOtpEnabled   Boolean        @default(false)
+  currentChallenge  String?
+  loginFailures     Int            @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relatii
+  orders             Order[]             // Comenzile create de acest user
+  activityLogs       ActivityLog[]       // Actiunile efectuate de acest user
+  recoveryCodes      RecoveryCode[]
+  authenticators     Authenticator[]
+  emailOtpChallenges EmailOtpChallenge[]
+  mfaPendingTokens   MfaPendingToken[]
+  aiChatMessages     AiChatMessage[]
+
+  @@map("users")
+}
+
+model RecoveryCode {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recovery_codes")
+}
+
+model MfaPendingToken {
+  jti       String   @id
+  userId    Int
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mfa_pending_tokens")
+}
+
+model Authenticator {
+  id                  String   @id @default(cuid())
+  userId              Int
+  credentialId        String   @unique
+  credentialPublicKey Bytes
+  counter             BigInt   @default(0)
+  transports          String?
+  deviceName          String   @default("Security Key")
+  createdAt           DateTime @default(now())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("authenticators")
+}
+
+model EmailOtpChallenge {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_otp_challenges")
+}
+
+// ============================================================
+// PARTENERI (Clienti + Transportatori in acelasi tabel)
+// ============================================================
+
+enum PartnerType {
+  CLIENT        // Doar client (beneficiar transport)
+  TRANSPORTER   // Doar transportator (executa cursa)
+  BOTH          // Poate fi si client si transportator
+}
+
+model Partner {
+  id                 Int         @id @default(autoincrement())
+  partnerType        PartnerType
+  
+  // Date fiscale
+  fiscalCode         String?     @unique  // CUI / VAT code
+  registrationNumber String?              // Nr. Registrul Comertului
+  
+  // Date generale
+  name               String
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  zipCode            String?
+  country            String      @default("Romania")
+  
+  // Contact
+  phone              String?
+  email              String?
+  contactPerson      String?              // Contact person name
+  
+  // Date comerciale (folosite mai ales pentru transportatori)
+  pricePerKm         Decimal?    @db.Decimal(10, 2)
+  paymentTermDays    Int?        @default(0)  // Termen plata in zile
+  
+  // Extra
+  delegateName       String?
+  poReference        String?
+  specialConditions  String?
+  additionalHeader   String?
+  bankName           String?
+  iban               String?
+  receiveAllSms      Boolean     @default(false)
+  
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  // Relatii
+  ordersAsClient      Order[]   @relation("OrderClient")
+  ordersAsTransporter Order[]   @relation("OrderTransporter")
+  invoices            Invoice[]
+  vehicles            Vehicle[]
+
+  @@map("partners")
+}
+
+// ============================================================
+// VEHICULE
+// ============================================================
+
+enum VehicleStatus {
+  AVAILABLE
+  ON_ROUTE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum FuelType {
+  DIESEL
+  PETROL
+  ELECTRIC
+  HYBRID
+  LPG
+  CNG
+}
+
+enum ConsumptionRecording {
+  MANUAL
+  AUTOMATIC
+}
+
+model Vehicle {
+  id                    Int                  @id @default(autoincrement())
+  
+  // Identificare
+  licensePlate          String               @unique  // Numar inmatriculare
+  vin                   String?              @unique  // Vehicle Identification Number
+  
+  // Caracteristici
+  make                  String?              // Marca (ex: Mercedes, Volvo)
+  model                 String?              // Model (ex: Actros, FH)
+  yearOfManufacture     Int?
+  emissionsStandard     String?              // Euro 6, Euro 5, etc.
+  axles                 Int?
+  category              String?              // Categoria vehiculului
+  fuelType              FuelType?
+  
+  // Dimensiuni & Capacitate
+  lengthCm              Decimal?             @db.Decimal(8, 2)
+  widthCm               Decimal?             @db.Decimal(8, 2)
+  heightCm              Decimal?             @db.Decimal(8, 2)
+  maxLoadingCapacityKg  Decimal?             @db.Decimal(10, 2)
+  
+  // Consum
+  tankCapacityLitres    Decimal?             @db.Decimal(8, 2)
+  consumptionPer100km   Decimal?             @db.Decimal(5, 2)
+  consumptionRecording  ConsumptionRecording?
+  ratePerKm             Decimal?             @db.Decimal(10, 4)
+  
+  // Proprietar / Partener transportator
+  partnerId             Int?
+  partner               Partner?             @relation(fields: [partnerId], references: [id])
+  
+  status                VehicleStatus        @default(AVAILABLE)
+  notes                 String?
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  // Relatii
+  orders                Order[]
+
+  @@map("vehicles")
+}
+
+// ============================================================
+// COMENZI / SHIPMENTS
+// ============================================================
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id                       Int         @id @default(autoincrement())
+  
+  // Numar comanda generat automat (ex: BGR315861)
+  orderNumber              String      @unique
+  orderSeries              String      @default("BGR")
+  
+  // Referinte
+  clientOrderReference     String?     // Referinta clientului
+  transporterReference     String?     // Referinta transportatorului
+  intermediaryPartnerRef   String?     // Referinta partener intermediar
+  
+  // Relatii principale
+  clientId                 Int
+  client                   Partner     @relation("OrderClient", fields: [clientId], references: [id])
+  
+  transporterId            Int?
+  transporter              Partner?    @relation("OrderTransporter", fields: [transporterId], references: [id])
+  
+  vehicleId                Int?
+  vehicle                  Vehicle?    @relation(fields: [vehicleId], references: [id])
+  
+  // Sofer (camp text simplu)
+  driverName               String?
+  contactName              String?     // Your contact (editable by dispatcher)
+  
+  // Pickup
+  pickupAddress            String?
+  pickupCountry            String?
+  pickupDateBegin          DateTime?
+  pickupDateEnd            DateTime?
+  
+  // Delivery
+  deliveryAddress          String?
+  deliveryCountry          String?
+  deliveryDateBegin        DateTime?
+  deliveryDateEnd          DateTime?
+  
+  // Financiar
+  distanceKm               Decimal?    @db.Decimal(10, 2)
+  transporterPrice         Decimal?    @db.Decimal(10, 2)  // Pret platit transportatorului
+  transporterCurrency      String?     @default("EUR")
+  clientPrice              Decimal?    @db.Decimal(10, 2)  // Pret facturat clientului
+  clientCurrency           String?     @default("EUR")
+  
+  // Cargo / Marfa
+  cargoQuantity            Int?
+  cargoDescription         String?
+  cargoLengthCm            Decimal?    @db.Decimal(8, 2)
+  cargoWidthCm             Decimal?    @db.Decimal(8, 2)
+  cargoHeightCm            Decimal?    @db.Decimal(8, 2)
+  cargoWeightKg            Decimal?    @db.Decimal(10, 2)
+  cargoItemsJson           String?     @db.Text  // JSON array of CargoItem[]
+  additionalPickupsJson    String?     @db.Text  // JSON array of AddressStop[]
+  additionalDeliveriesJson String?     @db.Text  // JSON array of AddressStop[]
+
+  // Status & Meta
+  status                   OrderStatus @default(DRAFT)
+  notes                    String?
+  internalNotes            String?
+  documentDate             DateTime    @default(now())
+  createdById              Int?
+  createdBy                User?       @relation(fields: [createdById], references: [id])
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  // Send Order (M13)
+  isSent                   Boolean     @default(false)
+  sentAt                   DateTime?
+
+  // Electronic Stamp (M33)
+  applyStamp               Boolean     @default(false)
+
+  // Archiving (M34+)
+  finalizedAt              DateTime?
+  archivedAt               DateTime?
+
+  // Relatii
+  activityLogs             ActivityLog[]
+  invoiceItems             InvoiceItem[]
+
+  @@map("orders")
+}
+
+// ============================================================
+// FACTURI
+// ============================================================
+
+enum InvoiceStatus {
+  DRAFT
+  SENT_TO_SMARTBILL   // Trimisa catre SmartBill API
+  ISSUED              // Emisa cu succes in SmartBill
+  CANCELLED
+  ERROR               // Eroare la trimitere SmartBill
+}
+
+model Invoice {
+  id                  Int           @id @default(autoincrement())
+  
+  // Numarul facturii (returnat de SmartBill dupa emitere)
+  smartbillSeries     String?       // Seria din SmartBill (ex: BGR)
+  smartbillNumber     String?       // Numarul din SmartBill (ex: 204120)
+  
+  // Partener client caruia i se factureaza
+  partnerId           Int
+  partner             Partner       @relation(fields: [partnerId], references: [id])
+  
+  // Date factura
+  issueDate           DateTime      @default(now())
+  dueDate             DateTime?
+  
+  // Totaluri
+  totalAmountEur      Decimal       @db.Decimal(12, 2) @default(0)
+  vatPercent          Decimal       @db.Decimal(5, 2)  @default(0)
+  vatAmount           Decimal       @db.Decimal(12, 2) @default(0)
+  
+  currency            String        @default("EUR")
+  
+  // Status SmartBill
+  status              InvoiceStatus @default(DRAFT)
+  smartbillError      String?       // Mesaj eroare daca statusul e ERROR
+  
+  // PDF generat local (backup / fallback)
+  pdfPath             String?
+  
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // Relatii
+  items               InvoiceItem[]
+
+  @@map("invoices")
+}
+
+// Liniile din factura (fiecare comanda = o linie)
+model InvoiceItem {
+  id            Int      @id @default(autoincrement())
+  
+  invoiceId     Int
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  orderId       Int
+  order         Order    @relation(fields: [orderId], references: [id])
+  
+  // Datele liniei (preluate din comanda la momentul facturarii)
+  description   String   // Ex: "1 852 964" (numarul comenzii clientului)
+  unit          String   @default("trip")
+  quantity      Decimal  @db.Decimal(8, 2) @default(1)
+  unitPrice     Decimal  @db.Decimal(12, 2)
+  totalPrice    Decimal  @db.Decimal(12, 2)
+  vatValue      Decimal  @db.Decimal(12, 2) @default(0)
+  
+  @@map("invoice_items")
+}
+
+// ============================================================
+// JURNAL DE ACTIVITATE (Timeline per comanda)
+// ============================================================
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  action      String   // Ex: "changed status from Draft to Completed"
+  details     String?  // Detalii suplimentare JSON
+  
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+// ============================================================
+// SETARI APLICATIE
+// ============================================================
+
+model AppSettings {
+  id                    Int      @id @default(1)
+  
+  // Date firma (Vendor pe factura)
+  companyName           String   @default("")
+  companyVatCode        String   @default("")
+  companyRegNumber      String   @default("")
+  companyAddress        String   @default("")
+  companyCity           String   @default("")
+  companyCounty         String   @default("")
+  companyIban           String   @default("")
+  companyBank           String   @default("")
+  companySwift          String   @default("")
+  companyLogoPath       String?
+  companyStampPath      String?
+  companyPhone          String   @default("")
+  companyEmail          String   @default("")
+  termsAndConditions    String   @default("")
+
+  // SmartBill API
+  smartbillEmail        String   @default("")
+  smartbillApiToken     String   @default("")
+  smartbillSeriesName   String   @default("")  // Seria folosita pentru facturi
+  smartbillVatCode      String   @default("")  // CIF-ul firmei in SmartBill
+  
+  // Setari facturare
+  defaultVatPercent     Decimal  @db.Decimal(5,2) @default(21)
+  defaultCurrency       String   @default("EUR")
+  defaultPaymentDays    Int      @default(30)
+
+  // Numerotare comenzi (M13)
+  orderNumberStart      Int      @default(1)
+
+  // SMTP Email (M13)
+  smtpEmail             String   @default("")
+  smtpPassword          String   @default("")
+  smtpHost              String   @default("")
+  smtpPort              Int      @default(587)
+  smtpEnabled           Boolean  @default(false)
+  smtpSecure            Boolean  @default(false)
+
+  // Order Auto-Archive (M34+)
+  autoArchiveEnabled      Boolean  @default(true)
+  autoArchiveAfterMonths  Int      @default(3)
+  autoArchiveFrequency    String   @default("DAILY")
+  autoArchiveDay          Int?
+  autoArchiveTime         String   @default("02:00")
+
+  // Database Auto-Backup (M35)
+  autoBackupEnabled      Boolean  @default(true)
+  autoBackupFrequency    String   @default("DAILY")  // DAILY | WEEKLY | MONTHLY
+  autoBackupDay          Int?                        // WEEKLY: 0-6, MONTHLY: 1-28
+  autoBackupTime         String   @default("03:00")
+  autoBackupDestination  String   @default("both")   // "local" | "remote" | "both"
+  autoBackupRetainCount  Int      @default(7)
+
+  // System Audit Log toggles — enable/disable per-category file logging
+  auditBackupEnabled    Boolean  @default(true)
+  auditAuthEnabled      Boolean  @default(true)
+  auditUserMgmtEnabled  Boolean  @default(true)
+  auditSettingsEnabled  Boolean  @default(true)
+
+  // AI Feature Toggles (diploma branch) — global on/off switches
+  aiChatbotEnabled      Boolean  @default(true)
+  aiPredictionEnabled   Boolean  @default(true)
+
+  // AI cache invalidation (M26) — incremented on every order create/update/delete
+  ordersVersion         Int      @default(0)
+
+  // Maintenance mode (M41)
+  maintenanceEnabled    Boolean  @default(false)
+  maintenanceMessage    String   @default("")
+
+  // Rate limit configuration (M41) — per-user, requests per minute
+  rateLimitPerUser      Int      @default(50)
+  rateLimitEnabled      Boolean  @default(true)
+
+  updatedAt             DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+// ============================================================
+// AI FEATURES (M26/M27/M28 — merged to master 2026-04-11)
+// ============================================================
+
+model AiPredictionCache {
+  id            Int      @id @default(autoincrement())
+  cacheKey      String   @unique  // "profit_day" | "profit_week" | "profit_month"
+  ordersVersion Int
+  result        String   @db.Text  // JSON string of chart-ready data
+  computedAt    DateTime @default(now())
+
+  @@map("ai_prediction_cache")
+}
+
+model AiChatMessage {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  role      String   // "user" | "assistant"
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_chat_messages")
+}

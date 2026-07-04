@@ -1,0 +1,141 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: diploma_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-tms_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-tms_db}
+    volumes:
+      - diploma_postgres_data:/var/lib/postgresql/data
+    networks:
+      - diploma_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tms_user} -d ${DB_NAME:-tms_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diploma_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-tms_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-tms_db}"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      PORT: ${PORT:-3001}
+      NODE_ENV: production
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required (e.g. https://diploma.yourdomain.com)}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:-admin@tms.ro}
+      SEED_USER_NAME: ${SEED_USER_NAME:-Admin TMS}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:?SEED_USER_PASSWORD is required}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      RATE_LIMIT_ENABLED: "true"
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:?WEBAUTHN_RP_ID is required (e.g. diploma.yourdomain.com)}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-TMS Transport}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:?WEBAUTHN_ORIGIN is required (e.g. https://diploma.yourdomain.com)}
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      PYTHON_API_URL: ${PYTHON_API_URL:-http://python-api:8000}
+      PYTHON_API_SECRET: ${PYTHON_API_SECRET:?PYTHON_API_SECRET is required}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-gemini}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:' + process.env.PORT + '/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    volumes:
+      - diploma_backend_uploads:/app/uploads
+    networks:
+      - diploma_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diploma_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8082:80"
+    volumes:
+      - ./nginx/diploma.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - diploma_network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: diploma_ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_PORT: ${OLLAMA_PORT:-11434}
+    volumes:
+      - diploma_ollama_models:/root/.ollama
+    networks:
+      - diploma_network
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  python-api:
+    build:
+      context: ./python-api
+      dockerfile: Dockerfile
+    container_name: diploma_python_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-tms_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-tms_db}"
+      PORT: ${PYTHON_API_PORT:-8000}
+      API_SECRET: ${PYTHON_API_SECRET:?PYTHON_API_SECRET is required}
+    networks:
+      - diploma_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: diploma_uptime_kuma
+    restart: unless-stopped
+    volumes:
+      - diploma_uptime_kuma_data:/app/data
+    ports:
+      - "127.0.0.1:3003:3001"
+    networks:
+      - diploma_network
+
+volumes:
+  diploma_postgres_data:
+  diploma_backend_uploads:
+  diploma_ollama_models:
+  diploma_uptime_kuma_data:
+
+networks:
+  diploma_network:
+    driver: bridge
